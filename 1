@@ -1,0 +1,217 @@
+# Reescrita do sistema Flask MVC com melhorias e estrutura padronizada
+
+# app.py
+from flask import Flask, render_template
+from controllers.produto_controller import produto_routes
+from controllers.usuario_controller import usuario_routes
+
+app = Flask(__name__)
+
+# Registrar Blueprints
+app.register_blueprint(produto_routes)
+app.register_blueprint(usuario_routes)
+
+@app.route("/cadastro_produto")
+def pagina_produto():
+    return render_template("cadastro_produto.html")
+
+@app.route("/cadastro_usuario")
+def pagina_usuario():
+    return render_template("cadastro_usuario.html")
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
+# config/database.py
+import mysql.connector
+
+def conectar():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="sua_senha",
+        database="sistema"
+    )
+
+
+# controllers/produto_controller.py
+from flask import Blueprint, request, jsonify
+from models.produto_model import *
+
+produto_routes = Blueprint("produto_routes", __name__)
+
+def validar_produto(data):
+    if len(data.get("nome", "")) < 3:
+        return "Nome deve ter no mínimo 3 caracteres."
+    if float(data.get("preco", 0)) <= 0:
+        return "Preço deve ser positivo."
+    if int(data.get("estoque", -1)) < 0:
+        return "Estoque deve ser 0 ou mais."
+    return None
+
+@produto_routes.route("/produtos", methods=["GET"])
+def get_produtos():
+    return jsonify(listar_produtos())
+
+@produto_routes.route("/produtos/<int:id>", methods=["GET"])
+def get_produto(id):
+    return jsonify(buscar_produto(id))
+
+@produto_routes.route("/produtos", methods=["POST"])
+def post_produto():
+    data = request.json
+    erro = validar_produto(data)
+    if erro:
+        return jsonify({"erro": erro}), 400
+    criar_produto(data["nome"], data["preco"], data["estoque"])
+    return jsonify({"mensagem": "Produto criado com sucesso."})
+
+@produto_routes.route("/produtos/<int:id>", methods=["PUT"])
+def put_produto(id):
+    data = request.json
+    erro = validar_produto(data)
+    if erro:
+        return jsonify({"erro": erro}), 400
+    atualizar_produto(id, data["nome"], data["preco"], data["estoque"])
+    return jsonify({"mensagem": "Produto atualizado com sucesso."})
+
+@produto_routes.route("/produtos/<int:id>", methods=["DELETE"])
+def delete_produto(id):
+    deletar_produto(id)
+    return jsonify({"mensagem": "Produto deletado com sucesso."})
+
+
+# controllers/usuario_controller.py
+from flask import Blueprint, request, jsonify
+from models.usuario_model import *
+
+usuario_routes = Blueprint("usuario_routes", __name__)
+
+def validar_usuario(data):
+    if len(data.get("nome", "")) < 3:
+        return "Nome deve ter no mínimo 3 caracteres."
+    if "@" not in data.get("email", ""):
+        return "Email inválido."
+    return None
+
+@usuario_routes.route("/usuarios", methods=["GET"])
+def get_usuarios():
+    return jsonify(listar_usuarios())
+
+@usuario_routes.route("/usuarios/<int:id>", methods=["GET"])
+def get_usuario(id):
+    return jsonify(buscar_usuario(id))
+
+@usuario_routes.route("/usuarios", methods=["POST"])
+def post_usuario():
+    data = request.json
+    erro = validar_usuario(data)
+    if erro:
+        return jsonify({"erro": erro}), 400
+    criar_usuario(data["nome"], data["email"])
+    return jsonify({"mensagem": "Usuário criado com sucesso."})
+
+@usuario_routes.route("/usuarios/<int:id>", methods=["PUT"])
+def put_usuario(id):
+    data = request.json
+    erro = validar_usuario(data)
+    if erro:
+        return jsonify({"erro": erro}), 400
+    atualizar_usuario(id, data["nome"], data["email"])
+    return jsonify({"mensagem": "Usuário atualizado com sucesso."})
+
+@usuario_routes.route("/usuarios/<int:id>", methods=["DELETE"])
+def delete_usuario(id):
+    deletar_usuario(id)
+    return jsonify({"mensagem": "Usuário deletado com sucesso."})
+
+
+# models/produto_model.py
+from config.database import conectar
+
+def listar_produtos():
+    con = conectar()
+    cursor = con.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM produtos")
+    dados = cursor.fetchall()
+    con.close()
+    return dados
+
+def buscar_produto(id):
+    con = conectar()
+    cursor = con.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM produtos WHERE id = %s", (id,))
+    dado = cursor.fetchone()
+    con.close()
+    return dado
+
+def criar_produto(nome, preco, estoque):
+    con = conectar()
+    cursor = con.cursor()
+    cursor.execute("INSERT INTO produtos (nome, preco, estoque) VALUES (%s, %s, %s)", (nome, preco, estoque))
+    con.commit()
+    con.close()
+
+def atualizar_produto(id, nome, preco, estoque):
+    con = conectar()
+    cursor = con.cursor()
+    cursor.execute("UPDATE produtos SET nome = %s, preco = %s, estoque = %s WHERE id = %s", (nome, preco, estoque, id))
+    con.commit()
+    con.close()
+
+def deletar_produto(id):
+    con = conectar()
+    cursor = con.cursor()
+    cursor.execute("DELETE FROM produtos WHERE id = %s", (id,))
+    con.commit()
+    con.close()
+
+
+# models/usuario_model.py
+from config.database import conectar
+
+def listar_usuarios():
+    con = conectar()
+    cursor = con.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM usuarios")
+    dados = cursor.fetchall()
+    con.close()
+    return dados
+
+def buscar_usuario(id):
+    con = conectar()
+    cursor = con.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM usuarios WHERE id = %s", (id,))
+    dado = cursor.fetchone()
+    con.close()
+    return dado
+
+def criar_usuario(nome, email):
+    con = conectar()
+    cursor = con.cursor()
+    cursor.execute("INSERT INTO usuarios (nome, email) VALUES (%s, %s)", (nome, email))
+    con.commit()
+    con.close()
+
+def atualizar_usuario(id, nome, email):
+    con = conectar()
+    cursor = con.cursor()
+    cursor.execute("UPDATE usuarios SET nome = %s, email = %s WHERE id = %s", (nome, email, id))
+    con.commit()
+    con.close()
+
+def deletar_usuario(id):
+    con = conectar()
+    cursor = con.cursor()
+    cursor.execute("DELETE FROM usuarios WHERE id = %s", (id,))
+    con.commit()
+    con.close()
+
+
+# requirements.txt
+flask
+mysql-connector-python
+
+
+# templates/cadastro_produto.html e cadastro_usuario.html são os mesmos do projeto original.
